@@ -2,7 +2,10 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <meta name="theme-color" content="#0b0e14">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <title>Puter Claude Chat</title>
 
   <!-- Markdown + sanitizer + syntax highlighting (CDN). marked v4 retains the inline `highlight` option. -->
@@ -20,13 +23,31 @@
       background: #0b0e14;
       color: #e6edf6;
       overflow: hidden;
+      -webkit-tap-highlight-color: transparent;
+      -webkit-text-size-adjust: 100%;
     }
 
-    /* Layout */
+    /* Layout — dvh handles mobile browser chrome (address bar show/hide) */
     .app-root {
       display: flex;
       height: 100vh;
+      height: 100dvh;
       width: 100vw;
+      position: relative;
+    }
+
+    /* Sidebar backdrop — only visible on mobile when sidebar is open */
+    .sidebar-backdrop {
+      display: none;
+      position: fixed;
+      inset: 0;
+      background: rgba(0, 0, 0, 0.5);
+      z-index: 9;
+      opacity: 0;
+      transition: opacity 0.2s ease;
+    }
+    .sidebar-backdrop.visible {
+      opacity: 1;
     }
 
     /* Sidebar */
@@ -406,13 +427,15 @@
       border-radius: 14px;
       padding: 12px 16px;
       color: #f0f6fe;
-      font-size: 0.95rem;
+      font-size: 16px; /* ≥16px prevents iOS Safari zoom-on-focus */
       resize: none;
       max-height: 200px;
       min-height: 50px;
       line-height: 1.4;
       font-family: inherit;
       outline: none;
+      -webkit-appearance: none;
+      min-width: 0; /* allow shrinking inside flex on small screens */
     }
     .composer textarea:focus { border-color: #3c7eb0; }
 
@@ -449,22 +472,123 @@
       to { opacity: 1; transform: translateY(0); }
     }
 
-    /* Responsive */
-    @media (max-width: 768px) {
+    /* Prevent md-content from overflowing on narrow viewports */
+    .md-content { max-width: 100%; }
+    .md-content pre { max-width: 100%; }
+    .md-content img { max-width: 100%; height: auto; }
+
+    /* ============ Responsive ============ */
+    /* Tablet & below: sidebar becomes a drawer overlay */
+    @media (max-width: 900px) {
       .sidebar {
-        position: absolute;
+        position: fixed;
         top: 0;
         left: 0;
         bottom: 0;
-        z-index: 10;
+        width: 82vw;
+        max-width: 320px;
+        z-index: 20;
+        box-shadow: 4px 0 16px rgba(0,0,0,0.5);
+        transform: translateX(0);
+        transition: transform 0.22s ease;
+        margin-left: 0 !important;
       }
-      .sidebar.collapsed { margin-left: -280px; }
-      .header-title { max-width: 100%; font-size: 0.95rem; }
+      .sidebar.collapsed {
+        transform: translateX(-105%);
+      }
+      .sidebar-backdrop { display: block; }
+      .sidebar-backdrop:not(.visible) { pointer-events: none; }
+
+      .main { width: 100%; }
+      .main-header { padding: 10px 14px; gap: 8px; }
+      .header-title { font-size: 0.95rem; max-width: 100%; }
+      .model-selector { max-width: 160px; font-size: 0.8rem; padding: 6px 10px; }
+      .user-status { display: none; } /* moved to sidebar; save header space */
+    }
+
+    /* Phones */
+    @media (max-width: 600px) {
+      .chat-messages {
+        padding: 14px 12px 8px;
+        gap: 12px;
+      }
+      .message-bubble {
+        max-width: 92%;
+        padding: 11px 14px;
+        font-size: 0.93rem;
+        border-radius: 16px;
+      }
+      .input-area {
+        padding: 10px 12px calc(12px + env(safe-area-inset-bottom, 0px));
+      }
+      .composer {
+        gap: 6px;
+      }
+      .file-label {
+        padding: 0 10px;
+        font-size: 1rem;
+        height: 46px;
+      }
+      .composer textarea {
+        min-height: 46px;
+        padding: 10px 14px;
+        border-radius: 12px;
+      }
+      .send-btn {
+        padding: 0 16px;
+        height: 46px;
+        font-size: 0.9rem;
+      }
+      .main-header {
+        padding: 8px 12px;
+        flex-wrap: nowrap;
+      }
+      .header-title {
+        flex: 1 1 auto;
+        min-width: 0;
+        font-size: 0.9rem;
+      }
+      .header-controls {
+        flex: 0 0 auto;
+        gap: 6px;
+      }
+      .sidebar-toggle {
+        padding: 6px 10px;
+        font-size: 1.1rem;
+      }
+      .model-selector {
+        max-width: 130px;
+        font-size: 0.78rem;
+        padding: 6px 8px;
+      }
+      .md-content h1 { font-size: 1.2rem; }
+      .md-content h2 { font-size: 1.1rem; }
+      .md-content h3 { font-size: 1rem; }
+      .md-content pre { font-size: 0.78em; padding: 10px; }
+      .error-banner { padding: 8px 12px; font-size: 0.8rem; }
+      .preview-image { max-width: 70px; max-height: 56px; }
+    }
+
+    /* Very narrow phones */
+    @media (max-width: 380px) {
+      .model-selector { max-width: 110px; }
+      .header-title { display: none; } /* make room for controls */
+      .message-bubble { max-width: 95%; }
+    }
+
+    /* Landscape phones: reduce vertical padding so chat stays usable */
+    @media (max-height: 500px) and (orientation: landscape) {
+      .main-header { padding: 6px 12px; }
+      .chat-messages { padding: 10px 12px 6px; }
+      .input-area { padding: 8px 12px; }
+      .composer textarea { min-height: 40px; }
+      .file-label, .send-btn { height: 40px; }
     }
   </style>
 </head>
 <body>
 <div class="app-root">
+  <div class="sidebar-backdrop" id="sidebar-backdrop"></div>
   <!-- SIDEBAR -->
   <aside class="sidebar" id="sidebar">
     <div class="sidebar-header">
@@ -664,6 +788,7 @@
   const $ = (id) => document.getElementById(id);
   const dom = {
     sidebar: $("sidebar"),
+    sidebarBackdrop: $("sidebar-backdrop"),
     sidebarToggle: $("sidebar-toggle"),
     newChatBtn: $("new-chat-btn"),
     chatList: $("chat-list"),
@@ -1216,8 +1341,38 @@
   /* =========================================================
    *  Event handlers
    * =======================================================*/
-  dom.sidebarToggle.addEventListener("click", () => {
-    dom.sidebar.classList.toggle("collapsed");
+  const isMobileView = () => window.matchMedia("(max-width: 900px)").matches;
+  function openSidebar() {
+    dom.sidebar.classList.remove("collapsed");
+    if (isMobileView()) dom.sidebarBackdrop.classList.add("visible");
+  }
+  function closeSidebar() {
+    dom.sidebar.classList.add("collapsed");
+    dom.sidebarBackdrop.classList.remove("visible");
+  }
+  function toggleSidebar() {
+    if (dom.sidebar.classList.contains("collapsed")) openSidebar();
+    else closeSidebar();
+  }
+  dom.sidebarToggle.addEventListener("click", toggleSidebar);
+  dom.sidebarBackdrop.addEventListener("click", closeSidebar);
+
+  // Auto-close sidebar on mobile when user picks a chat or starts a new one
+  const origSwitchChat = switchChat;
+  // (We shadow via wrapping click handlers below — simpler than monkey-patching.)
+  dom.chatList.addEventListener("click", (e) => {
+    if (e.target.closest(".chat-item") && !e.target.closest(".chat-item-delete")) {
+      if (isMobileView()) closeSidebar();
+    }
+  });
+  // Reset sidebar visibility on resize (desktop always visible, mobile drawer)
+  window.addEventListener("resize", () => {
+    if (!isMobileView()) {
+      dom.sidebar.classList.remove("collapsed");
+      dom.sidebarBackdrop.classList.remove("visible");
+    } else if (!dom.sidebarBackdrop.classList.contains("visible")) {
+      dom.sidebar.classList.add("collapsed");
+    }
   });
 
   dom.newChatBtn.addEventListener("click", () => {
@@ -1225,9 +1380,11 @@
     const cur = activeChat();
     if (cur && cur.messages.length === 0) {
       log("New Chat: current chat already empty, staying here");
+      if (isMobileView()) closeSidebar();
       return;
     }
     createChat();
+    if (isMobileView()) closeSidebar();
   });
 
   dom.clearAllBtn.addEventListener("click", () => {
@@ -1325,6 +1482,11 @@
    * =======================================================*/
   (async function init() {
     log("Initializing app…");
+
+    // Default to collapsed sidebar on mobile/tablet
+    if (isMobileView()) {
+      dom.sidebar.classList.add("collapsed");
+    }
 
     // Load model preference
     const savedModel = Storage.loadModel();
