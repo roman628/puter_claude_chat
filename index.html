@@ -1,0 +1,593 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Puter.js · Claude & Multi-Model Chat</title>
+  <style>
+    * {
+      box-sizing: border-box;
+      margin: 0;
+    }
+    body {
+      font-family: system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', sans-serif;
+      background: #0b0e14;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      min-height: 100vh;
+      margin: 0;
+      padding: 16px;
+    }
+    .app-container {
+      width: 100%;
+      max-width: 900px;
+      height: 90vh;
+      background: #14181f;
+      border-radius: 28px;
+      box-shadow: 0 20px 40px rgba(0, 0, 0, 0.6), 0 0 0 1px rgba(255, 255, 255, 0.03);
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+      backdrop-filter: blur(2px);
+    }
+    /* header */
+    .chat-header {
+      padding: 16px 20px;
+      border-bottom: 1px solid #2a323c;
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      justify-content: space-between;
+      background: #1a2129;
+    }
+    .header-title {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+    .header-title h2 {
+      font-weight: 500;
+      font-size: 1.3rem;
+      color: #f0f3f8;
+      letter-spacing: -0.01em;
+    }
+    .badge {
+      background: #2c3e50;
+      padding: 4px 10px;
+      border-radius: 40px;
+      font-size: 0.75rem;
+      font-weight: 500;
+      color: #bdd3ff;
+      border: 1px solid #3e5068;
+    }
+    .controls {
+      display: flex;
+      gap: 12px;
+      align-items: center;
+      flex-wrap: wrap;
+    }
+    .model-selector {
+      background: #0f151c;
+      color: #e3e9f2;
+      border: 1px solid #364452;
+      border-radius: 30px;
+      padding: 8px 16px;
+      font-size: 0.9rem;
+      font-weight: 450;
+      cursor: pointer;
+      outline: none;
+    }
+    .btn {
+      background: #262f3a;
+      border: 1px solid #3f4d5e;
+      color: #eef3fc;
+      padding: 8px 14px;
+      border-radius: 30px;
+      font-size: 0.85rem;
+      font-weight: 500;
+      cursor: pointer;
+      transition: 0.15s;
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+    }
+    .btn:hover {
+      background: #35414f;
+      border-color: #5f748b;
+    }
+    .btn-clear {
+      background: #2a1c20;
+      border-color: #784a50;
+      color: #ffb7b7;
+    }
+    .btn-clear:hover {
+      background: #44262b;
+      border-color: #a1626b;
+    }
+    .user-status {
+      font-size: 0.8rem;
+      color: #9aaebb;
+      margin-left: 5px;
+    }
+    /* chat area */
+    .chat-messages {
+      flex: 1;
+      overflow-y: auto;
+      padding: 20px 20px 10px 20px;
+      display: flex;
+      flex-direction: column;
+      gap: 18px;
+      background: #10161c;
+      scroll-behavior: smooth;
+    }
+    .message-row {
+      display: flex;
+      animation: fadeIn 0.2s ease;
+    }
+    .user-row {
+      justify-content: flex-end;
+    }
+    .message-bubble {
+      max-width: 85%;
+      padding: 14px 18px;
+      border-radius: 24px;
+      line-height: 1.5;
+      font-size: 0.95rem;
+      word-break: break-word;
+      box-shadow: 0 2px 4px rgba(0,0,0,0.3);
+    }
+    .user-bubble {
+      background: #1e4a6b;
+      border-bottom-right-radius: 6px;
+      color: #f0f7ff;
+      border: 1px solid #2b6085;
+    }
+    .assistant-bubble {
+      background: #1f262e;
+      border-bottom-left-radius: 6px;
+      color: #e6edf6;
+      border: 1px solid #38434f;
+    }
+    .assistant-bubble pre {
+      background: #0d131a;
+      padding: 10px;
+      border-radius: 12px;
+      overflow-x: auto;
+      margin: 10px 0;
+    }
+    .timestamp {
+      font-size: 0.65rem;
+      opacity: 0.65;
+      margin-top: 6px;
+      text-align: right;
+    }
+    /* input area */
+    .input-area {
+      padding: 16px 20px;
+      background: #1a2129;
+      border-top: 1px solid #2e3843;
+    }
+    .attach-preview {
+      display: flex;
+      gap: 8px;
+      margin-bottom: 12px;
+      flex-wrap: wrap;
+    }
+    .preview-image {
+      max-width: 90px;
+      max-height: 70px;
+      border-radius: 14px;
+      border: 1px solid #3f5569;
+      object-fit: cover;
+    }
+    .composer {
+      display: flex;
+      align-items: flex-end;
+      gap: 12px;
+    }
+    .composer textarea {
+      flex: 1;
+      background: #0f161e;
+      border: 1px solid #31404f;
+      border-radius: 26px;
+      padding: 14px 18px;
+      color: #f0f6fe;
+      font-size: 0.95rem;
+      resize: none;
+      max-height: 120px;
+      min-height: 52px;
+      line-height: 1.4;
+      font-family: inherit;
+      outline: none;
+    }
+    .composer textarea:focus {
+      border-color: #3c7eb0;
+    }
+    .send-btn {
+      background: #1f4a74;
+      border: 1px solid #3478b0;
+      color: white;
+      padding: 12px 24px;
+      border-radius: 40px;
+      font-weight: 600;
+      font-size: 0.95rem;
+      height: 52px;
+    }
+    .send-btn:disabled {
+      opacity: 0.5;
+      pointer-events: none;
+    }
+    .file-label {
+      background: #1e2936;
+      padding: 12px 14px;
+      border-radius: 40px;
+      cursor: pointer;
+      border: 1px solid #385066;
+      height: 52px;
+      display: flex;
+      align-items: center;
+    }
+    #file-input {
+      display: none;
+    }
+    @keyframes fadeIn {
+      from { opacity: 0; transform: translateY(6px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+    .status-indicator {
+      color: #98afc7;
+      font-size: 0.75rem;
+      margin-left: 12px;
+    }
+  </style>
+</head>
+<body>
+<div class="app-container">
+  <div class="chat-header">
+    <div class="header-title">
+      <h2>🤖 Puter Chat</h2>
+      <span class="badge" id="model-badge">claude-sonnet-4-6</span>
+    </div>
+    <div class="controls">
+      <select id="model-select" class="model-selector" aria-label="AI Model">
+        <!-- Claude family -->
+        <optgroup label="🧠 Claude (Anthropic)">
+          <option value="claude-opus-4-7">Claude Opus 4.7</option>
+          <option value="claude-opus-4.6-fast">Claude Opus 4.6 Fast</option>
+          <option value="claude-sonnet-4-6" selected>Claude Sonnet 4.6</option>
+          <option value="claude-opus-4-6">Claude Opus 4.6</option>
+          <option value="claude-haiku-4-5">Claude Haiku 4.5</option>
+          <option value="claude-3-5-sonnet">Claude 3.5 Sonnet</option>
+        </optgroup>
+        <!-- OpenAI & others -->
+        <optgroup label="⚡ OpenAI / GPT">
+          <option value="gpt-5-nano">GPT-5 Nano</option>
+          <option value="gpt-4.1-nano">GPT-4.1 Nano</option>
+        </optgroup>
+        <optgroup label="🌌 DeepSeek">
+          <option value="deepseek/deepseek-r1">DeepSeek R1</option>
+        </optgroup>
+        <optgroup label="🔮 Gemini">
+          <option value="gemini-2.0-flash-exp">Gemini 2.0 Flash</option>
+        </optgroup>
+        <optgroup label="🤯 Grok">
+          <option value="grok-4.20-multi-agent-beta">Grok 4.20 Multi-Agent</option>
+        </optgroup>
+      </select>
+      <button class="btn" id="auth-btn" title="Sign in / out">🔐 Sign in</button>
+      <button class="btn btn-clear" id="clear-session-btn" title="Clear chat history (KV)">🗑️ Clear</button>
+      <span class="user-status" id="user-status"></span>
+    </div>
+  </div>
+
+  <div id="chat-container" class="chat-messages">
+    <!-- messages will be injected here -->
+  </div>
+
+  <div class="input-area">
+    <div id="attach-preview" class="attach-preview"></div>
+    <div class="composer">
+      <label class="file-label" title="Attach image (jpg/png/gif/webp)">
+        📎
+        <input type="file" id="file-input" accept="image/*">
+      </label>
+      <textarea id="user-input" placeholder="Message Claude..." rows="1"></textarea>
+      <button class="btn send-btn" id="send-btn">Send</button>
+    </div>
+  </div>
+</div>
+
+<script src="https://js.puter.com/v2/"></script>
+<script>
+  (function(){
+    "use strict";
+
+    // ---------- DOM elements ----------
+    const chatContainer = document.getElementById('chat-container');
+    const userInput = document.getElementById('user-input');
+    const sendBtn = document.getElementById('send-btn');
+    const modelSelect = document.getElementById('model-select');
+    const modelBadge = document.getElementById('model-badge');
+    const authBtn = document.getElementById('auth-btn');
+    const userStatus = document.getElementById('user-status');
+    const clearSessionBtn = document.getElementById('clear-session-btn');
+    const fileInput = document.getElementById('file-input');
+    const attachPreview = document.getElementById('attach-preview');
+
+    // State
+    let currentImageUrl = null;        // base64 or object URL
+    let isStreaming = false;
+    let chatMessages = [];            // array of { role, content, timestamp }
+    const KV_KEY = 'puter_chat_history';
+    const KV_MODEL_KEY = 'puter_last_model';
+
+    // ---------- Helpers ----------
+    function updateModelBadge() {
+      const selected = modelSelect.options[modelSelect.selectedIndex]?.text || modelSelect.value;
+      modelBadge.textContent = selected.split(' ').slice(0,2).join(' ') || modelSelect.value;
+    }
+    modelSelect.addEventListener('change', async () => {
+      updateModelBadge();
+      // persist model preference
+      try {
+        if (puter.kv) await puter.kv.set(KV_MODEL_KEY, modelSelect.value);
+      } catch(e) { /* ignore */ }
+    });
+
+    // Auto-resize textarea
+    userInput.addEventListener('input', function() {
+      this.style.height = 'auto';
+      this.style.height = Math.min(this.scrollHeight, 120) + 'px';
+    });
+
+    // Render messages from array
+    function renderMessages() {
+      if (!chatContainer) return;
+      chatContainer.innerHTML = '';
+      chatMessages.forEach(msg => {
+        appendMessageBubble(msg.role, msg.content, msg.timestamp);
+      });
+      chatContainer.scrollTop = chatContainer.scrollHeight;
+    }
+
+    function appendMessageBubble(role, content, timestamp = new Date().toISOString()) {
+      const row = document.createElement('div');
+      row.className = `message-row ${role === 'user' ? 'user-row' : 'assistant-row'}`;
+      
+      const bubble = document.createElement('div');
+      bubble.className = `message-bubble ${role === 'user' ? 'user-bubble' : 'assistant-bubble'}`;
+      
+      // simple formatting (line breaks)
+      const formatted = content
+        .replace(/```([\s\S]*?)```/g, '<pre>$1</pre>')
+        .replace(/\n/g, '<br>');
+      bubble.innerHTML = formatted;
+      
+      const timeDiv = document.createElement('div');
+      timeDiv.className = 'timestamp';
+      timeDiv.textContent = new Date(timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+      bubble.appendChild(timeDiv);
+      
+      row.appendChild(bubble);
+      chatContainer.appendChild(row);
+      chatContainer.scrollTop = chatContainer.scrollHeight;
+    }
+
+    // Load history from KV (cloud persistent)
+    async function loadChatHistory() {
+      try {
+        if (!puter.kv) return;
+        const saved = await puter.kv.get(KV_KEY);
+        if (saved && Array.isArray(saved)) {
+          chatMessages = saved;
+          renderMessages();
+        }
+        // load last model
+        const lastModel = await puter.kv.get(KV_MODEL_KEY);
+        if (lastModel) {
+          modelSelect.value = lastModel;
+          updateModelBadge();
+        }
+      } catch (e) {
+        console.warn('KV load failed', e);
+      }
+    }
+
+    // Save to KV (cloud)
+    async function persistChatHistory() {
+      try {
+        if (!puter.kv) return;
+        await puter.kv.set(KV_KEY, chatMessages);
+      } catch (e) {
+        console.warn('KV persist failed', e);
+      }
+    }
+
+    // Clear KV + local state
+    async function clearAllChatHistory() {
+      try {
+        chatMessages = [];
+        renderMessages();
+        if (puter.kv) {
+          await puter.kv.del(KV_KEY);
+          // optional: keep model preference
+        }
+        currentImageUrl = null;
+        attachPreview.innerHTML = '';
+      } catch (e) {
+        alert('Clear failed: ' + e.message);
+      }
+    }
+
+    // Add message to array + rerender + persist
+    function addMessage(role, content) {
+      const msg = { role, content, timestamp: new Date().toISOString() };
+      chatMessages.push(msg);
+      renderMessages();
+      persistChatHistory();
+    }
+
+    // Handle file selection (image)
+    fileInput.addEventListener('change', async (e) => {
+      const file = fileInput.files[0];
+      if (!file) {
+        currentImageUrl = null;
+        attachPreview.innerHTML = '';
+        return;
+      }
+      // preview
+      const reader = new FileReader();
+      reader.onload = (ev) => {
+        const base64 = ev.target.result;
+        currentImageUrl = base64;   // base64 data URL
+        attachPreview.innerHTML = `<img src="${base64}" class="preview-image" alt="preview">`;
+      };
+      reader.readAsDataURL(file);
+    });
+
+    // ---------- Auth & User ----------
+    async function refreshAuthUI() {
+      try {
+        const signedIn = await puter.auth.isSignedIn();
+        if (signedIn) {
+          const user = await puter.auth.getUser();
+          userStatus.textContent = user?.username || 'signed in';
+          authBtn.textContent = '🚪 Sign out';
+        } else {
+          userStatus.textContent = 'guest';
+          authBtn.textContent = '🔐 Sign in';
+        }
+      } catch (e) {
+        userStatus.textContent = 'auth error';
+      }
+    }
+
+    authBtn.addEventListener('click', async () => {
+      try {
+        const signedIn = await puter.auth.isSignedIn();
+        if (signedIn) {
+          await puter.auth.signOut();
+        } else {
+          await puter.auth.signIn();
+        }
+        await refreshAuthUI();
+      } catch (err) {
+        alert('Auth error: ' + err.message);
+      }
+    });
+
+    // ---------- Send message (with optional image) ----------
+    async function sendMessage() {
+      const prompt = userInput.value.trim();
+      if (!prompt && !currentImageUrl) return;
+      if (isStreaming) return;
+
+      // Ensure signed in
+      if (!(await puter.auth.isSignedIn())) {
+        await puter.auth.signIn();
+        await refreshAuthUI();
+      }
+
+      const model = modelSelect.value;
+      const hasImage = !!currentImageUrl;
+
+      // Add user message to UI & history
+      let userDisplay = prompt;
+      if (hasImage) userDisplay = prompt ? `🖼️ ${prompt}` : '🖼️ [Image attached]';
+      addMessage('user', userDisplay);
+
+      // Clear input & image preview
+      userInput.value = '';
+      userInput.style.height = 'auto';
+      
+      // Prepare assistant placeholder (streaming will update it)
+      const assistantMsgIndex = chatMessages.length;
+      addMessage('assistant', '💬 Thinking...');
+      
+      // Disable send
+      isStreaming = true;
+      sendBtn.disabled = true;
+
+      try {
+        let stream;
+        const options = { model, stream: true };
+        
+        if (hasImage) {
+          // Puter.js supports image URL or base64 as second argument
+          const imageSource = currentImageUrl; // base64
+          stream = await puter.ai.chat(prompt || "Describe this image", imageSource, options);
+        } else {
+          stream = await puter.ai.chat(prompt, options);
+        }
+
+        // Clear image after sending
+        currentImageUrl = null;
+        attachPreview.innerHTML = '';
+        fileInput.value = '';
+
+        // Accumulate streaming text
+        let accumulated = '';
+        for await (const part of stream) {
+          if (part?.text) {
+            accumulated += part.text;
+            // update last assistant message
+            chatMessages[assistantMsgIndex].content = accumulated;
+            renderMessages();
+          }
+        }
+        if (!accumulated) {
+          chatMessages[assistantMsgIndex].content = '⚠️ No response content.';
+        }
+        renderMessages();
+        await persistChatHistory();
+      } catch (error) {
+        console.error(error);
+        chatMessages[assistantMsgIndex].content = `❌ Error: ${error.message}`;
+        renderMessages();
+        await persistChatHistory();
+      } finally {
+        isStreaming = false;
+        sendBtn.disabled = false;
+      }
+    }
+
+    sendBtn.addEventListener('click', sendMessage);
+    userInput.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter' && !e.shiftKey) {
+        e.preventDefault();
+        sendMessage();
+      }
+    });
+
+    // Clear session button
+    clearSessionBtn.addEventListener('click', async () => {
+      if (confirm('Delete all chat history from cloud (KV) and local?')) {
+        await clearAllChatHistory();
+      }
+    });
+
+    // ---------- Initialize ----------
+    (async function init() {
+      await refreshAuthUI();
+      // Load model from KV or default
+      try {
+        const savedModel = await puter.kv?.get(KV_MODEL_KEY);
+        if (savedModel) {
+          modelSelect.value = savedModel;
+        }
+      } catch(e) {}
+      updateModelBadge();
+      
+      await loadChatHistory();
+      
+      // If not signed in, hint but don't force
+      if (!(await puter.auth.isSignedIn())) {
+        // user can sign in manually
+      }
+    })();
+
+  })();
+</script>
+</body>
+</html>
