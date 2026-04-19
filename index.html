@@ -3,138 +3,290 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Puter.js · Claude & Multi-Model Chat</title>
+  <title>Puter Claude Chat</title>
+
+  <!-- Markdown + sanitizer + syntax highlighting (CDN). marked v4 retains the inline `highlight` option. -->
+  <script src="https://cdn.jsdelivr.net/npm/marked@4.3.0/marked.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/dompurify@3.0.11/dist/purify.min.js"></script>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11.9.0/build/styles/github-dark.min.css">
+  <script src="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11.9.0/build/highlight.min.js"></script>
+
   <style>
-    * {
-      box-sizing: border-box;
-      margin: 0;
-    }
+    * { box-sizing: border-box; }
+    html, body { height: 100%; }
     body {
+      margin: 0;
       font-family: system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', sans-serif;
       background: #0b0e14;
-      display: flex;
-      justify-content: center;
-      align-items: center;
-      min-height: 100vh;
-      margin: 0;
-      padding: 16px;
+      color: #e6edf6;
+      overflow: hidden;
     }
-    .app-container {
-      width: 100%;
-      max-width: 900px;
-      height: 90vh;
-      background: #14181f;
-      border-radius: 28px;
-      box-shadow: 0 20px 40px rgba(0, 0, 0, 0.6), 0 0 0 1px rgba(255, 255, 255, 0.03);
+
+    /* Layout */
+    .app-root {
+      display: flex;
+      height: 100vh;
+      width: 100vw;
+    }
+
+    /* Sidebar */
+    .sidebar {
+      width: 280px;
+      min-width: 280px;
+      background: #0f151c;
+      border-right: 1px solid #242d38;
       display: flex;
       flex-direction: column;
       overflow: hidden;
-      backdrop-filter: blur(2px);
+      transition: margin-left 0.2s ease;
     }
-    /* header */
-    .chat-header {
-      padding: 16px 20px;
-      border-bottom: 1px solid #2a323c;
+    .sidebar.collapsed { margin-left: -280px; }
+    .sidebar-header {
+      padding: 14px 16px;
+      border-bottom: 1px solid #242d38;
       display: flex;
-      flex-wrap: wrap;
-      align-items: center;
-      justify-content: space-between;
-      background: #1a2129;
+      gap: 8px;
     }
-    .header-title {
-      display: flex;
-      align-items: center;
-      gap: 10px;
-    }
-    .header-title h2 {
-      font-weight: 500;
-      font-size: 1.3rem;
-      color: #f0f3f8;
-      letter-spacing: -0.01em;
-    }
-    .badge {
-      background: #2c3e50;
-      padding: 4px 10px;
-      border-radius: 40px;
-      font-size: 0.75rem;
-      font-weight: 500;
-      color: #bdd3ff;
-      border: 1px solid #3e5068;
-    }
-    .controls {
-      display: flex;
-      gap: 12px;
-      align-items: center;
-      flex-wrap: wrap;
-    }
-    .model-selector {
-      background: #0f151c;
-      color: #e3e9f2;
-      border: 1px solid #364452;
-      border-radius: 30px;
-      padding: 8px 16px;
+    .new-chat-btn {
+      flex: 1;
+      background: #1f4a74;
+      color: white;
+      border: 1px solid #3478b0;
+      padding: 10px 14px;
+      border-radius: 10px;
+      font-weight: 600;
       font-size: 0.9rem;
-      font-weight: 450;
       cursor: pointer;
-      outline: none;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
     }
+    .new-chat-btn:hover { background: #2a5f8f; }
+
+    .chat-list {
+      flex: 1;
+      overflow-y: auto;
+      padding: 8px;
+    }
+    .chat-list-empty {
+      color: #6e7f91;
+      padding: 16px;
+      text-align: center;
+      font-size: 0.85rem;
+    }
+    .chat-item {
+      display: flex;
+      align-items: center;
+      padding: 10px 12px;
+      border-radius: 8px;
+      cursor: pointer;
+      margin-bottom: 2px;
+      font-size: 0.9rem;
+      color: #cbd5e1;
+      transition: background 0.12s;
+      position: relative;
+      min-height: 40px;
+    }
+    .chat-item:hover { background: #1a232e; }
+    .chat-item.active {
+      background: #223349;
+      color: #ffffff;
+    }
+    .chat-item-title {
+      flex: 1;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      padding-right: 8px;
+    }
+    .chat-item-delete {
+      opacity: 0;
+      background: transparent;
+      border: none;
+      color: #ff8a8a;
+      font-size: 1rem;
+      cursor: pointer;
+      padding: 2px 6px;
+      border-radius: 4px;
+      transition: opacity 0.12s, background 0.12s;
+    }
+    .chat-item:hover .chat-item-delete,
+    .chat-item.active .chat-item-delete { opacity: 1; }
+    .chat-item-delete:hover { background: #44262b; }
+
+    .sidebar-footer {
+      padding: 12px;
+      border-top: 1px solid #242d38;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+
+    /* Usage meter */
+    .usage-box {
+      background: #131b24;
+      border: 1px solid #242d38;
+      border-radius: 10px;
+      padding: 10px 12px;
+      font-size: 0.75rem;
+    }
+    .usage-label {
+      display: flex;
+      justify-content: space-between;
+      color: #98afc7;
+      margin-bottom: 6px;
+    }
+    .usage-bar-bg {
+      height: 6px;
+      background: #1d2630;
+      border-radius: 4px;
+      overflow: hidden;
+    }
+    .usage-bar-fill {
+      height: 100%;
+      background: #3c7eb0;
+      width: 0%;
+      transition: width 0.3s;
+    }
+    .usage-bar-fill.warning { background: #d39b3a; }
+    .usage-bar-fill.danger { background: #d35a3a; }
+
     .btn {
       background: #262f3a;
       border: 1px solid #3f4d5e;
       color: #eef3fc;
-      padding: 8px 14px;
-      border-radius: 30px;
-      font-size: 0.85rem;
+      padding: 8px 12px;
+      border-radius: 8px;
+      font-size: 0.82rem;
       font-weight: 500;
       cursor: pointer;
-      transition: 0.15s;
-      display: inline-flex;
+      transition: 0.12s;
+      text-align: center;
+    }
+    .btn:hover { background: #35414f; border-color: #5f748b; }
+    .btn-danger { background: #2a1c20; border-color: #784a50; color: #ffb7b7; }
+    .btn-danger:hover { background: #44262b; border-color: #a1626b; }
+    .btn-block { width: 100%; }
+
+    /* Main area */
+    .main {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      min-width: 0;
+      background: #0b0e14;
+    }
+    .main-header {
+      padding: 12px 20px;
+      border-bottom: 1px solid #242d38;
+      display: flex;
       align-items: center;
-      gap: 4px;
+      gap: 12px;
+      flex-wrap: wrap;
+      background: #10161c;
     }
-    .btn:hover {
-      background: #35414f;
-      border-color: #5f748b;
+    .sidebar-toggle {
+      background: transparent;
+      border: 1px solid #2e3843;
+      color: #cbd5e1;
+      font-size: 1rem;
+      padding: 6px 10px;
+      border-radius: 6px;
+      cursor: pointer;
     }
-    .btn-clear {
-      background: #2a1c20;
-      border-color: #784a50;
-      color: #ffb7b7;
+    .sidebar-toggle:hover { background: #1a232e; }
+
+    .header-title {
+      font-size: 1.1rem;
+      font-weight: 500;
+      color: #f0f3f8;
+      margin-right: auto;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      max-width: 40%;
     }
-    .btn-clear:hover {
-      background: #44262b;
-      border-color: #a1626b;
+    .header-controls {
+      display: flex;
+      gap: 8px;
+      align-items: center;
+      flex-wrap: wrap;
+    }
+
+    .model-selector {
+      background: #0f151c;
+      color: #e3e9f2;
+      border: 1px solid #364452;
+      border-radius: 8px;
+      padding: 7px 12px;
+      font-size: 0.85rem;
+      cursor: pointer;
+      outline: none;
+      max-width: 220px;
     }
     .user-status {
-      font-size: 0.8rem;
+      font-size: 0.75rem;
       color: #9aaebb;
-      margin-left: 5px;
     }
-    /* chat area */
+
+    /* Error banner */
+    .error-banner {
+      background: #4a1f25;
+      border-bottom: 1px solid #7a3138;
+      color: #ffcccc;
+      padding: 10px 20px;
+      font-size: 0.85rem;
+      display: none;
+      align-items: center;
+      gap: 10px;
+    }
+    .error-banner.visible { display: flex; }
+    .error-banner-close {
+      background: transparent;
+      border: none;
+      color: #ffcccc;
+      cursor: pointer;
+      font-size: 1rem;
+      margin-left: auto;
+    }
+
+    /* Chat messages */
     .chat-messages {
       flex: 1;
       overflow-y: auto;
-      padding: 20px 20px 10px 20px;
+      padding: 20px 20px 10px;
       display: flex;
       flex-direction: column;
-      gap: 18px;
-      background: #10161c;
+      gap: 16px;
       scroll-behavior: smooth;
     }
+    .empty-state {
+      margin: auto;
+      text-align: center;
+      color: #6e7f91;
+      max-width: 500px;
+    }
+    .empty-state h3 {
+      color: #cbd5e1;
+      margin-bottom: 10px;
+      font-weight: 500;
+    }
+
     .message-row {
       display: flex;
       animation: fadeIn 0.2s ease;
     }
-    .user-row {
-      justify-content: flex-end;
-    }
+    .message-row.user-row { justify-content: flex-end; }
+
     .message-bubble {
       max-width: 85%;
       padding: 14px 18px;
-      border-radius: 24px;
-      line-height: 1.5;
+      border-radius: 18px;
+      line-height: 1.55;
       font-size: 0.95rem;
-      word-break: break-word;
+      word-wrap: break-word;
+      overflow-wrap: break-word;
       box-shadow: 0 2px 4px rgba(0,0,0,0.3);
     }
     .user-bubble {
@@ -144,450 +296,1076 @@
       border: 1px solid #2b6085;
     }
     .assistant-bubble {
-      background: #1f262e;
+      background: #1a2028;
       border-bottom-left-radius: 6px;
       color: #e6edf6;
-      border: 1px solid #38434f;
+      border: 1px solid #2e3843;
     }
-    .assistant-bubble pre {
+    .error-bubble {
+      background: #2a1820;
+      border: 1px solid #6b2f3a;
+      color: #ffb7b7;
+    }
+
+    /* Markdown styling inside assistant bubbles */
+    .md-content { overflow-wrap: break-word; }
+    .md-content > *:first-child { margin-top: 0; }
+    .md-content > *:last-child { margin-bottom: 0; }
+    .md-content p { margin: 8px 0; }
+    .md-content h1, .md-content h2, .md-content h3, .md-content h4 {
+      margin: 16px 0 8px; font-weight: 600; color: #f0f6fe;
+    }
+    .md-content h1 { font-size: 1.4rem; border-bottom: 1px solid #2e3843; padding-bottom: 6px; }
+    .md-content h2 { font-size: 1.25rem; }
+    .md-content h3 { font-size: 1.1rem; }
+    .md-content ul, .md-content ol { margin: 8px 0; padding-left: 26px; }
+    .md-content li { margin: 3px 0; }
+    .md-content code {
       background: #0d131a;
-      padding: 10px;
-      border-radius: 12px;
+      border-radius: 4px;
+      padding: 2px 6px;
+      font-family: 'Fira Code', Consolas, monospace;
+      font-size: 0.85em;
+      color: #ffb37a;
+    }
+    .md-content pre {
+      background: #0a0f15;
+      border: 1px solid #1d2630;
+      border-radius: 10px;
+      padding: 12px 14px;
       overflow-x: auto;
       margin: 10px 0;
+      font-size: 0.85em;
     }
+    .md-content pre code {
+      background: transparent;
+      padding: 0;
+      color: #e6edf6;
+    }
+    .md-content blockquote {
+      border-left: 3px solid #3478b0;
+      padding-left: 12px;
+      margin: 10px 0;
+      color: #b8c5d4;
+    }
+    .md-content a { color: #6ea8e1; text-decoration: underline; }
+    .md-content table { border-collapse: collapse; margin: 10px 0; }
+    .md-content th, .md-content td {
+      border: 1px solid #2e3843;
+      padding: 6px 10px;
+    }
+    .md-content th { background: #1a232e; }
+    .md-content hr { border: none; border-top: 1px solid #2e3843; margin: 12px 0; }
+
+    .cursor-blink {
+      display: inline-block;
+      width: 7px;
+      height: 1em;
+      background: #6ea8e1;
+      animation: blink 1s infinite;
+      vertical-align: text-bottom;
+      margin-left: 2px;
+    }
+    @keyframes blink { 50% { opacity: 0; } }
+
     .timestamp {
       font-size: 0.65rem;
-      opacity: 0.65;
-      margin-top: 6px;
+      opacity: 0.6;
+      margin-top: 8px;
       text-align: right;
     }
-    /* input area */
+
+    /* Input area */
     .input-area {
-      padding: 16px 20px;
-      background: #1a2129;
-      border-top: 1px solid #2e3843;
+      padding: 12px 20px 16px;
+      background: #10161c;
+      border-top: 1px solid #242d38;
     }
     .attach-preview {
       display: flex;
       gap: 8px;
-      margin-bottom: 12px;
+      margin-bottom: 8px;
       flex-wrap: wrap;
     }
     .preview-image {
       max-width: 90px;
       max-height: 70px;
-      border-radius: 14px;
+      border-radius: 10px;
       border: 1px solid #3f5569;
       object-fit: cover;
     }
     .composer {
       display: flex;
       align-items: flex-end;
-      gap: 12px;
+      gap: 8px;
     }
     .composer textarea {
       flex: 1;
       background: #0f161e;
       border: 1px solid #31404f;
-      border-radius: 26px;
-      padding: 14px 18px;
+      border-radius: 14px;
+      padding: 12px 16px;
       color: #f0f6fe;
       font-size: 0.95rem;
       resize: none;
-      max-height: 120px;
-      min-height: 52px;
+      max-height: 200px;
+      min-height: 50px;
       line-height: 1.4;
       font-family: inherit;
       outline: none;
     }
-    .composer textarea:focus {
-      border-color: #3c7eb0;
+    .composer textarea:focus { border-color: #3c7eb0; }
+
+    .file-label {
+      background: #1e2936;
+      padding: 0 14px;
+      border-radius: 12px;
+      cursor: pointer;
+      border: 1px solid #385066;
+      height: 50px;
+      display: flex;
+      align-items: center;
+      font-size: 1.1rem;
     }
+    .file-label:hover { background: #27384a; }
+    #file-input { display: none; }
+
     .send-btn {
       background: #1f4a74;
       border: 1px solid #3478b0;
       color: white;
-      padding: 12px 24px;
-      border-radius: 40px;
+      padding: 0 22px;
+      border-radius: 12px;
       font-weight: 600;
       font-size: 0.95rem;
-      height: 52px;
-    }
-    .send-btn:disabled {
-      opacity: 0.5;
-      pointer-events: none;
-    }
-    .file-label {
-      background: #1e2936;
-      padding: 12px 14px;
-      border-radius: 40px;
+      height: 50px;
       cursor: pointer;
-      border: 1px solid #385066;
-      height: 52px;
-      display: flex;
-      align-items: center;
     }
-    #file-input {
-      display: none;
-    }
+    .send-btn:hover { background: #2a5f8f; }
+    .send-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+
     @keyframes fadeIn {
-      from { opacity: 0; transform: translateY(6px); }
+      from { opacity: 0; transform: translateY(4px); }
       to { opacity: 1; transform: translateY(0); }
     }
-    .status-indicator {
-      color: #98afc7;
-      font-size: 0.75rem;
-      margin-left: 12px;
+
+    /* Responsive */
+    @media (max-width: 768px) {
+      .sidebar {
+        position: absolute;
+        top: 0;
+        left: 0;
+        bottom: 0;
+        z-index: 10;
+      }
+      .sidebar.collapsed { margin-left: -280px; }
+      .header-title { max-width: 100%; font-size: 0.95rem; }
     }
   </style>
 </head>
 <body>
-<div class="app-container">
-  <div class="chat-header">
-    <div class="header-title">
-      <h2>🤖 Puter Chat</h2>
-      <span class="badge" id="model-badge">claude-sonnet-4-6</span>
+<div class="app-root">
+  <!-- SIDEBAR -->
+  <aside class="sidebar" id="sidebar">
+    <div class="sidebar-header">
+      <button class="new-chat-btn" id="new-chat-btn" title="Start a new chat">
+        <span>+</span> New Chat
+      </button>
     </div>
-    <div class="controls">
-      <select id="model-select" class="model-selector" aria-label="AI Model">
-        <!-- Claude family -->
-        <optgroup label="🧠 Claude (Anthropic)">
-          <option value="claude-opus-4-7">Claude Opus 4.7</option>
-          <option value="claude-opus-4.6-fast">Claude Opus 4.6 Fast</option>
-          <option value="claude-sonnet-4-6" selected>Claude Sonnet 4.6</option>
-          <option value="claude-opus-4-6">Claude Opus 4.6</option>
-          <option value="claude-haiku-4-5">Claude Haiku 4.5</option>
-          <option value="claude-3-5-sonnet">Claude 3.5 Sonnet</option>
-        </optgroup>
-        <!-- OpenAI & others -->
-        <optgroup label="⚡ OpenAI / GPT">
-          <option value="gpt-5-nano">GPT-5 Nano</option>
-          <option value="gpt-4.1-nano">GPT-4.1 Nano</option>
-        </optgroup>
-        <optgroup label="🌌 DeepSeek">
-          <option value="deepseek/deepseek-r1">DeepSeek R1</option>
-        </optgroup>
-        <optgroup label="🔮 Gemini">
-          <option value="gemini-2.0-flash-exp">Gemini 2.0 Flash</option>
-        </optgroup>
-        <optgroup label="🤯 Grok">
-          <option value="grok-4.20-multi-agent-beta">Grok 4.20 Multi-Agent</option>
-        </optgroup>
-      </select>
-      <button class="btn" id="auth-btn" title="Sign in / out">🔐 Sign in</button>
-      <button class="btn btn-clear" id="clear-session-btn" title="Clear chat history (KV)">🗑️ Clear</button>
-      <span class="user-status" id="user-status"></span>
+    <div class="chat-list" id="chat-list">
+      <div class="chat-list-empty">No chats yet.</div>
     </div>
-  </div>
+    <div class="sidebar-footer">
+      <div class="usage-box">
+        <div class="usage-label">
+          <span>Monthly Usage</span>
+          <span id="usage-text">—</span>
+        </div>
+        <div class="usage-bar-bg">
+          <div class="usage-bar-fill" id="usage-bar"></div>
+        </div>
+      </div>
+      <button class="btn btn-block" id="auth-btn">🔐 Sign in</button>
+      <button class="btn btn-block btn-danger" id="clear-all-btn" title="Delete all chats from this browser">🗑️ Delete All Chats</button>
+    </div>
+  </aside>
 
-  <div id="chat-container" class="chat-messages">
-    <!-- messages will be injected here -->
-  </div>
+  <!-- MAIN -->
+  <div class="main">
+    <header class="main-header">
+      <button class="sidebar-toggle" id="sidebar-toggle" title="Toggle sidebar">☰</button>
+      <div class="header-title" id="header-title">New Chat</div>
+      <div class="header-controls">
+        <select id="model-select" class="model-selector" aria-label="AI Model">
+          <optgroup label="Claude (Anthropic)">
+            <option value="claude-opus-4-7">Claude Opus 4.7</option>
+            <option value="claude-opus-4.6-fast">Claude Opus 4.6 Fast</option>
+            <option value="claude-sonnet-4-6" selected>Claude Sonnet 4.6</option>
+            <option value="claude-opus-4-6">Claude Opus 4.6</option>
+            <option value="claude-opus-4-5">Claude Opus 4.5</option>
+            <option value="claude-sonnet-4-5">Claude Sonnet 4.5</option>
+            <option value="claude-haiku-4-5">Claude Haiku 4.5</option>
+            <option value="claude-opus-4-1">Claude Opus 4.1</option>
+            <option value="claude-opus-4">Claude Opus 4</option>
+            <option value="claude-sonnet-4">Claude Sonnet 4</option>
+            <option value="claude-3-7-sonnet">Claude 3.7 Sonnet</option>
+            <option value="claude-3-5-sonnet">Claude 3.5 Sonnet</option>
+            <option value="claude-3-haiku">Claude 3 Haiku</option>
+          </optgroup>
+          <optgroup label="OpenAI / GPT">
+            <option value="gpt-5-nano">GPT-5 Nano</option>
+            <option value="gpt-4.1-nano">GPT-4.1 Nano</option>
+          </optgroup>
+          <optgroup label="DeepSeek">
+            <option value="deepseek/deepseek-r1">DeepSeek R1</option>
+          </optgroup>
+          <optgroup label="Gemini">
+            <option value="gemini-2.0-flash-exp">Gemini 2.0 Flash</option>
+          </optgroup>
+        </select>
+        <span class="user-status" id="user-status">guest</span>
+      </div>
+    </header>
 
-  <div class="input-area">
-    <div id="attach-preview" class="attach-preview"></div>
-    <div class="composer">
-      <label class="file-label" title="Attach image (jpg/png/gif/webp)">
-        📎
-        <input type="file" id="file-input" accept="image/*">
-      </label>
-      <textarea id="user-input" placeholder="Message Claude..." rows="1"></textarea>
-      <button class="btn send-btn" id="send-btn">Send</button>
+    <div class="error-banner" id="error-banner">
+      <span id="error-text"></span>
+      <button class="error-banner-close" id="error-close">×</button>
+    </div>
+
+    <div class="chat-messages" id="chat-messages"></div>
+
+    <div class="input-area">
+      <div class="attach-preview" id="attach-preview"></div>
+      <div class="composer">
+        <label class="file-label" title="Attach image (jpg/png/gif/webp)">
+          📎
+          <input type="file" id="file-input" accept="image/*">
+        </label>
+        <textarea id="user-input" placeholder="Message Claude... (Shift+Enter for newline)" rows="1"></textarea>
+        <button class="send-btn" id="send-btn">Send</button>
+      </div>
     </div>
   </div>
 </div>
 
 <script src="https://js.puter.com/v2/"></script>
 <script>
-  (function(){
-    "use strict";
+(function () {
+  "use strict";
 
-    // ---------- DOM elements ----------
-    const chatContainer = document.getElementById('chat-container');
-    const userInput = document.getElementById('user-input');
-    const sendBtn = document.getElementById('send-btn');
-    const modelSelect = document.getElementById('model-select');
-    const modelBadge = document.getElementById('model-badge');
-    const authBtn = document.getElementById('auth-btn');
-    const userStatus = document.getElementById('user-status');
-    const clearSessionBtn = document.getElementById('clear-session-btn');
-    const fileInput = document.getElementById('file-input');
-    const attachPreview = document.getElementById('attach-preview');
+  /* =========================================================
+   *  Constants & Logger
+   * =======================================================*/
+  const LOG_PREFIX = "[PuterChat]";
+  const log = (...args) => console.log(LOG_PREFIX, ...args);
+  const warn = (...args) => console.warn(LOG_PREFIX, ...args);
+  const err = (...args) => console.error(LOG_PREFIX, ...args);
 
-    // State
-    let currentImageUrl = null;        // base64 or object URL
-    let isStreaming = false;
-    let chatMessages = [];            // array of { role, content, timestamp }
-    const KV_KEY = 'puter_chat_history';
-    const KV_MODEL_KEY = 'puter_last_model';
+  const STREAM_FIRST_TOKEN_TIMEOUT_MS = 45_000;
+  const STREAM_TOTAL_TIMEOUT_MS = 5 * 60_000;
 
-    // ---------- Helpers ----------
-    function updateModelBadge() {
-      const selected = modelSelect.options[modelSelect.selectedIndex]?.text || modelSelect.value;
-      modelBadge.textContent = selected.split(' ').slice(0,2).join(' ') || modelSelect.value;
-    }
-    modelSelect.addEventListener('change', async () => {
-      updateModelBadge();
-      // persist model preference
-      try {
-        if (puter.kv) await puter.kv.set(KV_MODEL_KEY, modelSelect.value);
-      } catch(e) { /* ignore */ }
-    });
+  const LS_CHATS = "pcc.chats.v1";
+  const LS_ACTIVE = "pcc.activeChat.v1";
+  const LS_MODEL = "pcc.lastModel.v1";
 
-    // Auto-resize textarea
-    userInput.addEventListener('input', function() {
-      this.style.height = 'auto';
-      this.style.height = Math.min(this.scrollHeight, 120) + 'px';
-    });
-
-    // Render messages from array
-    function renderMessages() {
-      if (!chatContainer) return;
-      chatContainer.innerHTML = '';
-      chatMessages.forEach(msg => {
-        appendMessageBubble(msg.role, msg.content, msg.timestamp);
-      });
-      chatContainer.scrollTop = chatContainer.scrollHeight;
-    }
-
-    function appendMessageBubble(role, content, timestamp = new Date().toISOString()) {
-      const row = document.createElement('div');
-      row.className = `message-row ${role === 'user' ? 'user-row' : 'assistant-row'}`;
-      
-      const bubble = document.createElement('div');
-      bubble.className = `message-bubble ${role === 'user' ? 'user-bubble' : 'assistant-bubble'}`;
-      
-      // simple formatting (line breaks)
-      const formatted = content
-        .replace(/```([\s\S]*?)```/g, '<pre>$1</pre>')
-        .replace(/\n/g, '<br>');
-      bubble.innerHTML = formatted;
-      
-      const timeDiv = document.createElement('div');
-      timeDiv.className = 'timestamp';
-      timeDiv.textContent = new Date(timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-      bubble.appendChild(timeDiv);
-      
-      row.appendChild(bubble);
-      chatContainer.appendChild(row);
-      chatContainer.scrollTop = chatContainer.scrollHeight;
-    }
-
-    // Load history from KV (cloud persistent)
-    async function loadChatHistory() {
-      try {
-        if (!puter.kv) return;
-        const saved = await puter.kv.get(KV_KEY);
-        if (saved && Array.isArray(saved)) {
-          chatMessages = saved;
-          renderMessages();
-        }
-        // load last model
-        const lastModel = await puter.kv.get(KV_MODEL_KEY);
-        if (lastModel) {
-          modelSelect.value = lastModel;
-          updateModelBadge();
-        }
-      } catch (e) {
-        console.warn('KV load failed', e);
-      }
-    }
-
-    // Save to KV (cloud)
-    async function persistChatHistory() {
-      try {
-        if (!puter.kv) return;
-        await puter.kv.set(KV_KEY, chatMessages);
-      } catch (e) {
-        console.warn('KV persist failed', e);
-      }
-    }
-
-    // Clear KV + local state
-    async function clearAllChatHistory() {
-      try {
-        chatMessages = [];
-        renderMessages();
-        if (puter.kv) {
-          await puter.kv.del(KV_KEY);
-          // optional: keep model preference
-        }
-        currentImageUrl = null;
-        attachPreview.innerHTML = '';
-      } catch (e) {
-        alert('Clear failed: ' + e.message);
-      }
-    }
-
-    // Add message to array + rerender + persist
-    function addMessage(role, content) {
-      const msg = { role, content, timestamp: new Date().toISOString() };
-      chatMessages.push(msg);
-      renderMessages();
-      persistChatHistory();
-    }
-
-    // Handle file selection (image)
-    fileInput.addEventListener('change', async (e) => {
-      const file = fileInput.files[0];
-      if (!file) {
-        currentImageUrl = null;
-        attachPreview.innerHTML = '';
-        return;
-      }
-      // preview
-      const reader = new FileReader();
-      reader.onload = (ev) => {
-        const base64 = ev.target.result;
-        currentImageUrl = base64;   // base64 data URL
-        attachPreview.innerHTML = `<img src="${base64}" class="preview-image" alt="preview">`;
-      };
-      reader.readAsDataURL(file);
-    });
-
-    // ---------- Auth & User ----------
-    async function refreshAuthUI() {
-      try {
-        const signedIn = await puter.auth.isSignedIn();
-        if (signedIn) {
-          const user = await puter.auth.getUser();
-          userStatus.textContent = user?.username || 'signed in';
-          authBtn.textContent = '🚪 Sign out';
-        } else {
-          userStatus.textContent = 'guest';
-          authBtn.textContent = '🔐 Sign in';
-        }
-      } catch (e) {
-        userStatus.textContent = 'auth error';
-      }
-    }
-
-    authBtn.addEventListener('click', async () => {
-      try {
-        const signedIn = await puter.auth.isSignedIn();
-        if (signedIn) {
-          await puter.auth.signOut();
-        } else {
-          await puter.auth.signIn();
-        }
-        await refreshAuthUI();
-      } catch (err) {
-        alert('Auth error: ' + err.message);
-      }
-    });
-
-    // ---------- Send message (with optional image) ----------
-    async function sendMessage() {
-      const prompt = userInput.value.trim();
-      if (!prompt && !currentImageUrl) return;
-      if (isStreaming) return;
-
-      // Ensure signed in
-      if (!(await puter.auth.isSignedIn())) {
-        await puter.auth.signIn();
-        await refreshAuthUI();
-      }
-
-      const model = modelSelect.value;
-      const hasImage = !!currentImageUrl;
-
-      // Add user message to UI & history
-      let userDisplay = prompt;
-      if (hasImage) userDisplay = prompt ? `🖼️ ${prompt}` : '🖼️ [Image attached]';
-      addMessage('user', userDisplay);
-
-      // Clear input & image preview
-      userInput.value = '';
-      userInput.style.height = 'auto';
-      
-      // Prepare assistant placeholder (streaming will update it)
-      const assistantMsgIndex = chatMessages.length;
-      addMessage('assistant', '💬 Thinking...');
-      
-      // Disable send
-      isStreaming = true;
-      sendBtn.disabled = true;
-
-      try {
-        let stream;
-        const options = { model, stream: true };
-        
-        if (hasImage) {
-          // Puter.js supports image URL or base64 as second argument
-          const imageSource = currentImageUrl; // base64
-          stream = await puter.ai.chat(prompt || "Describe this image", imageSource, options);
-        } else {
-          stream = await puter.ai.chat(prompt, options);
-        }
-
-        // Clear image after sending
-        currentImageUrl = null;
-        attachPreview.innerHTML = '';
-        fileInput.value = '';
-
-        // Accumulate streaming text
-        let accumulated = '';
-        for await (const part of stream) {
-          if (part?.text) {
-            accumulated += part.text;
-            // update last assistant message
-            chatMessages[assistantMsgIndex].content = accumulated;
-            renderMessages();
+  /* =========================================================
+   *  Markdown setup (marked + DOMPurify + highlight.js)
+   * =======================================================*/
+  if (window.marked && window.hljs) {
+    marked.setOptions({
+      breaks: true,
+      gfm: true,
+      highlight: (code, lang) => {
+        try {
+          if (lang && hljs.getLanguage(lang)) {
+            return hljs.highlight(code, { language: lang, ignoreIllegals: true }).value;
           }
+          return hljs.highlightAuto(code).value;
+        } catch (e) {
+          warn("highlight failed:", e);
+          return code;
         }
-        if (!accumulated) {
-          chatMessages[assistantMsgIndex].content = '⚠️ No response content.';
-        }
-        renderMessages();
-        await persistChatHistory();
-      } catch (error) {
-        console.error(error);
-        chatMessages[assistantMsgIndex].content = `❌ Error: ${error.message}`;
-        renderMessages();
-        await persistChatHistory();
-      } finally {
-        isStreaming = false;
-        sendBtn.disabled = false;
+      },
+    });
+    log("marked + highlight.js configured");
+  } else {
+    warn("Markdown libraries missing — falling back to plain text");
+  }
+
+  function renderMarkdown(text) {
+    if (!text) return "";
+    try {
+      if (window.marked && window.DOMPurify) {
+        const rawHtml = marked.parse(text);
+        return DOMPurify.sanitize(rawHtml, {
+          ADD_ATTR: ["target"],
+        });
       }
+    } catch (e) {
+      err("markdown render failed:", e);
+    }
+    // Fallback: escape + line breaks
+    const div = document.createElement("div");
+    div.textContent = text;
+    return div.innerHTML.replace(/\n/g, "<br>");
+  }
+
+  /* =========================================================
+   *  localStorage-backed storage (NOT linked to Puter account)
+   * =======================================================*/
+  const Storage = {
+    loadChats() {
+      try {
+        const raw = localStorage.getItem(LS_CHATS);
+        if (!raw) return {};
+        const parsed = JSON.parse(raw);
+        return (parsed && typeof parsed === "object") ? parsed : {};
+      } catch (e) {
+        err("loadChats failed:", e);
+        return {};
+      }
+    },
+    saveChats(chats) {
+      try {
+        localStorage.setItem(LS_CHATS, JSON.stringify(chats));
+      } catch (e) {
+        err("saveChats failed (quota?):", e);
+        showError("Couldn't save chat — browser storage full. Delete some old chats.");
+      }
+    },
+    loadActive() { return localStorage.getItem(LS_ACTIVE); },
+    saveActive(id) {
+      if (id) localStorage.setItem(LS_ACTIVE, id);
+      else localStorage.removeItem(LS_ACTIVE);
+    },
+    loadModel() { return localStorage.getItem(LS_MODEL); },
+    saveModel(m) { localStorage.setItem(LS_MODEL, m); },
+    clearAll() {
+      localStorage.removeItem(LS_CHATS);
+      localStorage.removeItem(LS_ACTIVE);
+      // Keep model preference
+      log("Cleared all chat data from localStorage");
+    },
+  };
+
+  /* =========================================================
+   *  State
+   * =======================================================*/
+  const state = {
+    chats: {},           // id -> { id, title, created, updated, messages: [] }
+    activeChatId: null,
+    isStreaming: false,
+    currentImageDataUrl: null,
+  };
+
+  /* =========================================================
+   *  DOM
+   * =======================================================*/
+  const $ = (id) => document.getElementById(id);
+  const dom = {
+    sidebar: $("sidebar"),
+    sidebarToggle: $("sidebar-toggle"),
+    newChatBtn: $("new-chat-btn"),
+    chatList: $("chat-list"),
+    clearAllBtn: $("clear-all-btn"),
+    authBtn: $("auth-btn"),
+    userStatus: $("user-status"),
+    usageText: $("usage-text"),
+    usageBar: $("usage-bar"),
+    modelSelect: $("model-select"),
+    headerTitle: $("header-title"),
+    chatMessages: $("chat-messages"),
+    fileInput: $("file-input"),
+    attachPreview: $("attach-preview"),
+    userInput: $("user-input"),
+    sendBtn: $("send-btn"),
+    errorBanner: $("error-banner"),
+    errorText: $("error-text"),
+    errorClose: $("error-close"),
+  };
+
+  /* =========================================================
+   *  Error banner
+   * =======================================================*/
+  let errorHideTimer = null;
+  function showError(message, { persistent = false } = {}) {
+    err("UI error:", message);
+    dom.errorText.textContent = message;
+    dom.errorBanner.classList.add("visible");
+    if (errorHideTimer) clearTimeout(errorHideTimer);
+    if (!persistent) {
+      errorHideTimer = setTimeout(hideError, 8000);
+    }
+  }
+  function hideError() {
+    dom.errorBanner.classList.remove("visible");
+    if (errorHideTimer) { clearTimeout(errorHideTimer); errorHideTimer = null; }
+  }
+  dom.errorClose.addEventListener("click", hideError);
+
+  function humanizeError(e) {
+    const msg = (e && (e.message || e.error || e.toString())) || "Unknown error";
+    const lower = String(msg).toLowerCase();
+    if (lower.includes("usage-limited") || lower.includes("permission denied") || lower.includes("quota")) {
+      return "You've hit your Puter usage limit. Visit puter.com to add credits, or wait for the monthly reset.";
+    }
+    if (lower.includes("rate") && lower.includes("limit")) {
+      return "Rate limit — slow down and try again in a moment.";
+    }
+    if (lower.includes("not authenticated") || lower.includes("sign in")) {
+      return "You need to sign in to Puter first. Click the Sign in button.";
+    }
+    if (lower.includes("network") || lower.includes("failed to fetch")) {
+      return "Network error — check your connection.";
+    }
+    if (lower.includes("timeout")) {
+      return "Request timed out. The model may be overloaded — try again or switch models.";
+    }
+    return msg;
+  }
+
+  /* =========================================================
+   *  Chat management
+   * =======================================================*/
+  function uid() {
+    return "c_" + Date.now().toString(36) + "_" + Math.random().toString(36).slice(2, 8);
+  }
+
+  function createChat({ switchTo = true } = {}) {
+    const id = uid();
+    const now = new Date().toISOString();
+    const chat = { id, title: "New Chat", created: now, updated: now, messages: [] };
+    state.chats[id] = chat;
+    Storage.saveChats(state.chats);
+    log("Created chat", id);
+    if (switchTo) switchChat(id);
+    else { renderSidebar(); }
+    return id;
+  }
+
+  function deleteChat(id) {
+    if (!state.chats[id]) return;
+    delete state.chats[id];
+    Storage.saveChats(state.chats);
+    log("Deleted chat", id);
+    if (state.activeChatId === id) {
+      const remaining = Object.keys(state.chats);
+      if (remaining.length) {
+        switchChat(sortedChatIds()[0]);
+      } else {
+        createChat();
+      }
+    } else {
+      renderSidebar();
+    }
+  }
+
+  function switchChat(id) {
+    if (!state.chats[id]) {
+      warn("switchChat: chat not found", id);
+      return;
+    }
+    state.activeChatId = id;
+    Storage.saveActive(id);
+    log("Switched to chat", id);
+    state.currentImageDataUrl = null;
+    dom.attachPreview.innerHTML = "";
+    dom.fileInput.value = "";
+    renderSidebar();
+    renderMessages();
+    updateHeaderTitle();
+  }
+
+  function activeChat() {
+    return state.activeChatId ? state.chats[state.activeChatId] : null;
+  }
+
+  function ensureActiveChat() {
+    if (!state.activeChatId || !state.chats[state.activeChatId]) {
+      const ids = sortedChatIds();
+      if (ids.length) switchChat(ids[0]);
+      else createChat();
+    }
+  }
+
+  function sortedChatIds() {
+    return Object.values(state.chats)
+      .sort((a, b) => (b.updated || "").localeCompare(a.updated || ""))
+      .map(c => c.id);
+  }
+
+  function computeTitle(chat) {
+    const firstUser = chat.messages.find(m => m.role === "user");
+    if (!firstUser) return "New Chat";
+    const txt = String(firstUser.content || "").replace(/\s+/g, " ").trim();
+    return txt.length > 40 ? txt.slice(0, 40) + "…" : (txt || "New Chat");
+  }
+
+  function updateHeaderTitle() {
+    const chat = activeChat();
+    dom.headerTitle.textContent = chat ? (chat.title || "New Chat") : "New Chat";
+  }
+
+  /* =========================================================
+   *  Rendering
+   * =======================================================*/
+  function renderSidebar() {
+    const ids = sortedChatIds();
+    if (!ids.length) {
+      dom.chatList.innerHTML = `<div class="chat-list-empty">No chats yet.</div>`;
+      return;
+    }
+    dom.chatList.innerHTML = "";
+    ids.forEach(id => {
+      const chat = state.chats[id];
+      const item = document.createElement("div");
+      item.className = "chat-item" + (id === state.activeChatId ? " active" : "");
+      item.dataset.chatId = id;
+
+      const title = document.createElement("div");
+      title.className = "chat-item-title";
+      title.textContent = chat.title || "New Chat";
+
+      const delBtn = document.createElement("button");
+      delBtn.className = "chat-item-delete";
+      delBtn.title = "Delete this chat";
+      delBtn.innerHTML = "🗑";
+      delBtn.addEventListener("click", (ev) => {
+        ev.stopPropagation();
+        if (confirm(`Delete "${chat.title}"?`)) deleteChat(id);
+      });
+
+      item.appendChild(title);
+      item.appendChild(delBtn);
+      item.addEventListener("click", () => {
+        if (id !== state.activeChatId) switchChat(id);
+      });
+      dom.chatList.appendChild(item);
+    });
+  }
+
+  function renderMessages() {
+    const chat = activeChat();
+    dom.chatMessages.innerHTML = "";
+
+    if (!chat || chat.messages.length === 0) {
+      const empty = document.createElement("div");
+      empty.className = "empty-state";
+      empty.innerHTML = `
+        <h3>Start chatting</h3>
+        <p>Type a message below to start a conversation. Responses support full Markdown, streaming, and multi-turn context.</p>
+      `;
+      dom.chatMessages.appendChild(empty);
+      return;
     }
 
-    sendBtn.addEventListener('click', sendMessage);
-    userInput.addEventListener('keydown', (e) => {
-      if (e.key === 'Enter' && !e.shiftKey) {
-        e.preventDefault();
-        sendMessage();
-      }
+    chat.messages.forEach((msg, idx) => {
+      renderMessageRow(msg, idx);
     });
+    scrollToBottom();
+  }
 
-    // Clear session button
-    clearSessionBtn.addEventListener('click', async () => {
-      if (confirm('Delete all chat history from cloud (KV) and local?')) {
-        await clearAllChatHistory();
-      }
-    });
+  function renderMessageRow(msg, idx) {
+    const row = document.createElement("div");
+    row.className = "message-row " + (msg.role === "user" ? "user-row" : "assistant-row");
+    row.dataset.msgIdx = String(idx);
 
-    // ---------- Initialize ----------
-    (async function init() {
-      await refreshAuthUI();
-      // Load model from KV or default
-      try {
-        const savedModel = await puter.kv?.get(KV_MODEL_KEY);
-        if (savedModel) {
-          modelSelect.value = savedModel;
+    const bubble = document.createElement("div");
+    let bubbleClass = "message-bubble ";
+    if (msg.role === "user") bubbleClass += "user-bubble";
+    else if (msg.isError) bubbleClass += "error-bubble";
+    else bubbleClass += "assistant-bubble";
+    bubble.className = bubbleClass;
+
+    const content = document.createElement("div");
+    content.className = "md-content";
+    if (msg.role === "user") {
+      // Preserve user plain text (no markdown rendering for user input)
+      content.textContent = msg.content || "";
+      // But do preserve line breaks
+      content.style.whiteSpace = "pre-wrap";
+    } else {
+      content.innerHTML = renderMarkdown(msg.content || "");
+    }
+    bubble.appendChild(content);
+
+    if (msg.image) {
+      const img = document.createElement("img");
+      img.src = msg.image;
+      img.className = "preview-image";
+      img.style.marginTop = "8px";
+      img.style.maxWidth = "200px";
+      img.style.maxHeight = "200px";
+      bubble.appendChild(img);
+    }
+
+    if (msg.timestamp) {
+      const time = document.createElement("div");
+      time.className = "timestamp";
+      time.textContent = new Date(msg.timestamp).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+      bubble.appendChild(time);
+    }
+
+    row.appendChild(bubble);
+    dom.chatMessages.appendChild(row);
+  }
+
+  function updateLastAssistantMessage(content, { streaming = false } = {}) {
+    const chat = activeChat();
+    if (!chat || !chat.messages.length) return;
+    const lastIdx = chat.messages.length - 1;
+    const last = chat.messages[lastIdx];
+    if (last.role !== "assistant") return;
+    last.content = content;
+
+    // Update only the content element for the last row (avoid full re-render flicker)
+    const rows = dom.chatMessages.querySelectorAll(".message-row");
+    const lastRow = rows[rows.length - 1];
+    if (lastRow) {
+      const mdEl = lastRow.querySelector(".md-content");
+      if (mdEl) {
+        mdEl.innerHTML = renderMarkdown(content);
+        if (streaming) {
+          const cursor = document.createElement("span");
+          cursor.className = "cursor-blink";
+          mdEl.appendChild(cursor);
         }
-      } catch(e) {}
-      updateModelBadge();
-      
-      await loadChatHistory();
-      
-      // If not signed in, hint but don't force
-      if (!(await puter.auth.isSignedIn())) {
-        // user can sign in manually
+        scrollToBottomIfNear();
       }
+    } else {
+      renderMessages();
+    }
+  }
+
+  function scrollToBottom() {
+    dom.chatMessages.scrollTop = dom.chatMessages.scrollHeight;
+  }
+  function scrollToBottomIfNear() {
+    const el = dom.chatMessages;
+    const nearBottom = (el.scrollHeight - el.scrollTop - el.clientHeight) < 120;
+    if (nearBottom) scrollToBottom();
+  }
+
+  /* =========================================================
+   *  Adding messages
+   * =======================================================*/
+  function addMessage(role, content, { image = null, isError = false } = {}) {
+    const chat = activeChat();
+    if (!chat) return -1;
+    const msg = {
+      role,
+      content,
+      timestamp: new Date().toISOString(),
+      ...(image ? { image } : {}),
+      ...(isError ? { isError: true } : {}),
+    };
+    chat.messages.push(msg);
+    chat.updated = msg.timestamp;
+
+    // Auto-title from first user message
+    if (role === "user" && chat.messages.filter(m => m.role === "user").length === 1) {
+      chat.title = computeTitle(chat);
+      updateHeaderTitle();
+      renderSidebar();
+    } else if (role === "user") {
+      renderSidebar(); // bump order
+    }
+
+    Storage.saveChats(state.chats);
+    renderMessageRow(msg, chat.messages.length - 1);
+    scrollToBottom();
+    return chat.messages.length - 1;
+  }
+
+  /* =========================================================
+   *  Puter API — send prompt + streaming w/ timeouts
+   * =======================================================*/
+  function buildHistoryForAPI(chat, { excludeLastAssistantPlaceholder = true } = {}) {
+    // Returns array of { role, content } strings, compatible with multi-turn docs.
+    let messages = chat.messages.slice();
+    if (excludeLastAssistantPlaceholder && messages.length && messages[messages.length - 1].role === "assistant") {
+      messages = messages.slice(0, -1);
+    }
+    return messages.map(m => ({
+      role: m.role === "assistant" ? "assistant" : "user",
+      content: typeof m.content === "string" ? m.content : String(m.content || ""),
+    }));
+  }
+
+  async function streamWithTimeouts(streamIterable, { onToken, cancelRef }) {
+    // Wraps for-await with a first-token watchdog and total timeout.
+    // cancelRef = { cancelled: false } — set to true externally to stop onToken callbacks.
+    let gotFirstToken = false;
+    let accumulated = "";
+
+    const startedAt = Date.now();
+    const firstTokenWatchdog = new Promise((_, reject) => {
+      setTimeout(() => {
+        if (!gotFirstToken) reject(new Error("Timeout: no response received within 45s. Model may be overloaded."));
+      }, STREAM_FIRST_TOKEN_TIMEOUT_MS);
+    });
+    const totalTimeout = new Promise((_, reject) => {
+      setTimeout(() => reject(new Error("Timeout: response took longer than 5 minutes.")), STREAM_TOTAL_TIMEOUT_MS);
+    });
+
+    const consume = (async () => {
+      for await (const part of streamIterable) {
+        if (cancelRef?.cancelled) break;
+        const chunk = part?.text;
+        if (chunk) {
+          gotFirstToken = true;
+          accumulated += chunk;
+          try { onToken(accumulated); } catch (e) { err("onToken callback failed:", e); }
+        }
+      }
+      return accumulated;
     })();
 
+    const result = await Promise.race([consume, firstTokenWatchdog, totalTimeout]);
+    log(`Stream completed in ${Date.now() - startedAt}ms, ${accumulated.length} chars`);
+    return typeof result === "string" ? result : accumulated;
+  }
+
+  async function sendPrompt() {
+    if (state.isStreaming) {
+      log("sendPrompt ignored: already streaming");
+      return;
+    }
+    const prompt = dom.userInput.value.trim();
+    const image = state.currentImageDataUrl;
+    if (!prompt && !image) return;
+
+    ensureActiveChat();
+
+    // Ensure signed in (Puter requires auth for API calls)
+    try {
+      const signedIn = await puter.auth.isSignedIn();
+      if (!signedIn) {
+        log("Not signed in — triggering sign in popup");
+        await puter.auth.signIn();
+        await refreshAuthUI();
+        await refreshUsageMeter();
+      }
+    } catch (e) {
+      err("sign-in failed:", e);
+      showError("Sign-in failed: " + humanizeError(e));
+      return;
+    }
+
+    const model = dom.modelSelect.value;
+    log("sendPrompt:", { model, hasImage: !!image, promptLen: prompt.length });
+
+    // Add user message
+    addMessage("user", prompt || "(image only)", { image });
+
+    // Clear input + image
+    dom.userInput.value = "";
+    dom.userInput.style.height = "auto";
+    state.currentImageDataUrl = null;
+    dom.attachPreview.innerHTML = "";
+    dom.fileInput.value = "";
+
+    // Add assistant placeholder
+    const assistantIdx = addMessage("assistant", "");
+    state.isStreaming = true;
+    dom.sendBtn.disabled = true;
+    const cancelRef = { cancelled: false };
+
+    try {
+      const chat = activeChat();
+      const options = { model, stream: true };
+      let streamIterable;
+
+      if (image) {
+        // Image + prompt: Puter single-turn image API (no history in this path)
+        log("Calling puter.ai.chat with image", { model });
+        streamIterable = await puter.ai.chat(prompt || "Describe this image.", image, options);
+      } else {
+        // Multi-turn: pass full history array
+        const history = buildHistoryForAPI(chat);
+        log("Calling puter.ai.chat with history, turns:", history.length);
+        streamIterable = await puter.ai.chat(history, options);
+      }
+
+      if (!streamIterable || typeof streamIterable[Symbol.asyncIterator] !== "function") {
+        // Some non-stream edge case — treat as plain response
+        warn("Expected async iterable, got:", streamIterable);
+        const text = extractPlainText(streamIterable);
+        chat.messages[assistantIdx].content = text || "(empty response)";
+        updateLastAssistantMessage(chat.messages[assistantIdx].content, { streaming: false });
+        Storage.saveChats(state.chats);
+      } else {
+        const full = await streamWithTimeouts(streamIterable, {
+          cancelRef,
+          onToken: (partial) => {
+            if (cancelRef.cancelled) return;
+            chat.messages[assistantIdx].content = partial;
+            updateLastAssistantMessage(partial, { streaming: true });
+          },
+        });
+        chat.messages[assistantIdx].content = full || "(empty response)";
+        updateLastAssistantMessage(chat.messages[assistantIdx].content, { streaming: false });
+        Storage.saveChats(state.chats);
+      }
+
+      // Refresh usage meter after a successful call
+      refreshUsageMeter().catch(e => warn("usage refresh after call failed:", e));
+    } catch (error) {
+      err("sendPrompt error:", error);
+      cancelRef.cancelled = true;
+      const friendly = humanizeError(error);
+      showError(friendly, { persistent: friendly.includes("usage limit") });
+      const chat = activeChat();
+      if (chat && chat.messages[assistantIdx]) {
+        chat.messages[assistantIdx].content = "**⚠️ Error:** " + friendly;
+        chat.messages[assistantIdx].isError = true;
+        Storage.saveChats(state.chats);
+        renderMessages();
+      }
+    } finally {
+      state.isStreaming = false;
+      dom.sendBtn.disabled = false;
+    }
+  }
+
+  function extractPlainText(resp) {
+    if (!resp) return "";
+    if (typeof resp === "string") return resp;
+    try {
+      if (resp.message?.content?.[0]?.text) return resp.message.content[0].text;
+      if (resp.text) return resp.text;
+      if (Array.isArray(resp.content)) {
+        return resp.content.map(c => c.text || "").join("");
+      }
+    } catch (e) { warn("extractPlainText failed:", e); }
+    return JSON.stringify(resp);
+  }
+
+  /* =========================================================
+   *  Auth + Usage meter
+   * =======================================================*/
+  async function refreshAuthUI() {
+    try {
+      const signedIn = await puter.auth.isSignedIn();
+      if (signedIn) {
+        let name = "signed in";
+        try {
+          const u = await puter.auth.getUser();
+          name = u?.username || u?.email || "signed in";
+        } catch (e) { warn("getUser failed:", e); }
+        dom.userStatus.textContent = name;
+        dom.authBtn.textContent = "🚪 Sign out";
+      } else {
+        dom.userStatus.textContent = "guest";
+        dom.authBtn.textContent = "🔐 Sign in";
+      }
+    } catch (e) {
+      err("refreshAuthUI failed:", e);
+      dom.userStatus.textContent = "auth error";
+    }
+  }
+
+  async function refreshUsageMeter() {
+    try {
+      const signedIn = await puter.auth.isSignedIn();
+      if (!signedIn) {
+        dom.usageText.textContent = "sign in";
+        dom.usageBar.style.width = "0%";
+        dom.usageBar.classList.remove("warning", "danger");
+        return;
+      }
+      if (typeof puter.auth.getMonthlyUsage !== "function") {
+        warn("puter.auth.getMonthlyUsage not available");
+        dom.usageText.textContent = "n/a";
+        return;
+      }
+      const usage = await puter.auth.getMonthlyUsage();
+      log("Monthly usage:", usage);
+
+      // Puter tracks credits in microcents. Try to be flexible about keys.
+      const used = Number(usage?.used ?? usage?.used_microcents ?? usage?.consumed ?? 0);
+      const total = Number(usage?.total ?? usage?.limit ?? usage?.total_microcents ?? 0);
+
+      if (!total) {
+        dom.usageText.textContent = formatMicrocents(used);
+        dom.usageBar.style.width = "0%";
+        return;
+      }
+      const pct = Math.min(100, (used / total) * 100);
+      dom.usageBar.style.width = pct.toFixed(1) + "%";
+      dom.usageBar.classList.remove("warning", "danger");
+      if (pct >= 90) dom.usageBar.classList.add("danger");
+      else if (pct >= 70) dom.usageBar.classList.add("warning");
+      dom.usageText.textContent = `${formatMicrocents(used)} / ${formatMicrocents(total)}`;
+    } catch (e) {
+      warn("refreshUsageMeter failed:", e);
+      dom.usageText.textContent = "—";
+    }
+  }
+
+  function formatMicrocents(v) {
+    if (!v && v !== 0) return "—";
+    // 1,000,000 microcents = 1 cent, 100,000,000 microcents = $1
+    const dollars = v / 100_000_000;
+    if (dollars >= 1) return "$" + dollars.toFixed(2);
+    const cents = v / 1_000_000;
+    if (cents >= 1) return cents.toFixed(1) + "¢";
+    return v.toLocaleString() + "µ¢";
+  }
+
+  /* =========================================================
+   *  Event handlers
+   * =======================================================*/
+  dom.sidebarToggle.addEventListener("click", () => {
+    dom.sidebar.classList.toggle("collapsed");
+  });
+
+  dom.newChatBtn.addEventListener("click", () => {
+    // If current chat is empty, just switch to it rather than creating another empty one
+    const cur = activeChat();
+    if (cur && cur.messages.length === 0) {
+      log("New Chat: current chat already empty, staying here");
+      return;
+    }
+    createChat();
+  });
+
+  dom.clearAllBtn.addEventListener("click", () => {
+    if (!confirm("Delete ALL chats from this browser? This cannot be undone.")) return;
+    Storage.clearAll();
+    state.chats = {};
+    state.activeChatId = null;
+    createChat();
+    log("All chats deleted.");
+  });
+
+  dom.authBtn.addEventListener("click", async () => {
+    try {
+      const signedIn = await puter.auth.isSignedIn();
+      if (signedIn) {
+        await puter.auth.signOut();
+        log("Signed out");
+      } else {
+        await puter.auth.signIn();
+        log("Signed in");
+      }
+      await refreshAuthUI();
+      await refreshUsageMeter();
+    } catch (e) {
+      err("auth toggle failed:", e);
+      showError("Auth failed: " + humanizeError(e));
+    }
+  });
+
+  dom.modelSelect.addEventListener("change", () => {
+    Storage.saveModel(dom.modelSelect.value);
+    log("Model changed to:", dom.modelSelect.value);
+  });
+
+  dom.userInput.addEventListener("input", function () {
+    this.style.height = "auto";
+    this.style.height = Math.min(this.scrollHeight, 200) + "px";
+  });
+
+  dom.userInput.addEventListener("keydown", (e) => {
+    if (e.key === "Enter" && !e.shiftKey) {
+      e.preventDefault();
+      sendPrompt();
+    }
+  });
+
+  dom.sendBtn.addEventListener("click", sendPrompt);
+
+  dom.fileInput.addEventListener("change", () => {
+    const file = dom.fileInput.files?.[0];
+    if (!file) {
+      state.currentImageDataUrl = null;
+      dom.attachPreview.innerHTML = "";
+      return;
+    }
+    if (!file.type.startsWith("image/")) {
+      showError("Only image files are supported.");
+      dom.fileInput.value = "";
+      return;
+    }
+    const MAX = 5 * 1024 * 1024;
+    if (file.size > MAX) {
+      showError("Image too large — max 5 MB.");
+      dom.fileInput.value = "";
+      return;
+    }
+    const reader = new FileReader();
+    reader.onload = (ev) => {
+      state.currentImageDataUrl = ev.target.result;
+      dom.attachPreview.innerHTML = `
+        <div style="position:relative;display:inline-block;">
+          <img src="${state.currentImageDataUrl}" class="preview-image" alt="preview">
+          <button id="remove-image-btn" style="position:absolute;top:-6px;right:-6px;background:#44262b;border:1px solid #a1626b;color:#ffb7b7;border-radius:50%;width:20px;height:20px;font-size:0.75rem;cursor:pointer;line-height:1;">×</button>
+        </div>
+      `;
+      const removeBtn = document.getElementById("remove-image-btn");
+      if (removeBtn) {
+        removeBtn.addEventListener("click", () => {
+          state.currentImageDataUrl = null;
+          dom.attachPreview.innerHTML = "";
+          dom.fileInput.value = "";
+        });
+      }
+      log("Image attached, size:", file.size);
+    };
+    reader.onerror = (e) => {
+      err("FileReader error:", e);
+      showError("Couldn't read image file.");
+    };
+    reader.readAsDataURL(file);
+  });
+
+  /* =========================================================
+   *  Init
+   * =======================================================*/
+  (async function init() {
+    log("Initializing app…");
+
+    // Load model preference
+    const savedModel = Storage.loadModel();
+    if (savedModel) {
+      const opt = [...dom.modelSelect.options].find(o => o.value === savedModel);
+      if (opt) dom.modelSelect.value = savedModel;
+      log("Restored model:", savedModel);
+    }
+
+    // Load chats
+    state.chats = Storage.loadChats();
+    const savedActive = Storage.loadActive();
+    const ids = sortedChatIds();
+    if (ids.length) {
+      state.activeChatId = (savedActive && state.chats[savedActive]) ? savedActive : ids[0];
+      log("Loaded", ids.length, "chats. Active:", state.activeChatId);
+      renderSidebar();
+      renderMessages();
+      updateHeaderTitle();
+    } else {
+      log("No saved chats — creating first one");
+      createChat();
+    }
+
+    // Puter readiness
+    if (typeof puter === "undefined") {
+      showError("Puter.js failed to load. Check your internet / script-blocker.", { persistent: true });
+      return;
+    }
+
+    await refreshAuthUI();
+    await refreshUsageMeter();
+
+    // Auto-refresh usage every 60s if signed in
+    setInterval(() => {
+      puter.auth.isSignedIn().then(s => { if (s) refreshUsageMeter(); }).catch(() => {});
+    }, 60_000);
+
+    log("Ready.");
   })();
+})();
 </script>
 </body>
 </html>
